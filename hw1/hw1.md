@@ -1,0 +1,74 @@
+- Begin by restarting qemu and gdb, and set a break-point at 0x7c00, the start of the boot block (bootasm.S). Single step through the instructions (type si at the gdb prompt). Where in bootasm.S is the stack pointer initialized? (Single step until you see an instruction that moves a value into %esp, the register for the stack pointer.)
+
+In `bootblock.asm`  
+
+```
+  # Set up the stack pointer and call into C.
+  movl    $start, %esp
+    7c43:	bc 00 7c 00 00       	mov    $0x7c00,%esp
+```
+
+- Single step through the call to bootmain; what is on the stack now?
+```
+(gdb) si
+=> 0x7c48:	call   0x7d31
+
+(gdb) info reg
+esp            0x7bfc	0x7bfc
+(gdb) x/1x $esp
+0x7bfc:	0x00007c4d
+``` 
+
+bootmain's return address: 0x00007c4d
+
+- What do the first assembly instructions of bootmain do to the stack? Look for bootmain in bootblock.asm.
+```
+(gdb) si
+=> 0x7d31:	push   %ebp
+```
+
+- Continue tracing via gdb (using breakpoints if necessary -- see hint below) and look for the call that changes eip to 0x10000c. What does that call do to the stack? (Hint: Think about what this call is trying to accomplish in the boot sequence and try to identify this point in bootmain.c, and the corresponding instruction in the bootmain code in bootblock.asm. This might help you set suitable breakpoints to speed things up.)
+
+In `bootblock.asm`
+```
+  entry();
+    7d7d:	ff 15 18 00 01 00    	call   *0x10018
+    7d83:	eb d5                	jmp    7d5a <bootmain+0x29>
+```
+
+```
+(gdb) br *0x7d7d
+Breakpoint 1 at 0x7d7d
+(gdb) c
+Continuing.
+The target architecture is assumed to be i386
+=> 0x7d7d:	call   *0x10018
+
+Thread 1 hit Breakpoint 1, 0x00007d7d in ?? ()
+(gdb) si
+=> 0x10000c:	mov    %cr4,%eax
+0x0010000c in ?? ()
+(gdb) x/1x 0x10018
+0x10018:	0x0010000c
+(gdb) info reg
+esp            0x7bdc	0x7bdc
+
+(gdb) x/1x 0x7bdc
+0x7bdc:	0x00007d83
+```
+
+Push the return address of entry onto stack
+
+
+#### Submit: 
+The output of x/24x $esp with the valid part of the stack marked, plus your comments, in a file named hwN.txt (where N is the homework number as listed on the schedule).
+
+0x7bdc:	0x00007d83	0x00000000	0x00000000	0x00000000    
+				return eip of entry
+0x7bec:	0x00000000	0x00000000	0x00000000	0x00000000      
+				ebx         esi         edi         ebp
+0x7bfc:	0x00007c4d	0x8ec031fa	0x8ec08ed8	0xa864e4d0     
+				bootmain's return address                                 stack starts at 0x7c00     
+0x7c0c:	0xb0fa7502	0xe464e6d1	0x7502a864	0xe6dfb0fa    
+0x7c1c:	0x16010f60	0x200f7c78	0xc88366c0	0xc0220f01     
+0x7c2c:	0x087c31ea	0x10b86600	0x8ed88e00	0x66d08ec0     
